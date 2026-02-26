@@ -38,7 +38,7 @@
   ],
   "template/official": "demo-template",
   "config": {
-    "logLevel": "debug",
+    "logLevel": "off",
     "designWidth": 250
   },
   "router": {
