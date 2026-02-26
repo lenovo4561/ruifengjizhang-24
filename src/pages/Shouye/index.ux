@@ -75,12 +75,12 @@
             <block for="{{ calendarWeeks }}">
               <div class="calendar-row">
                 <block for="{{ $item }}">
-                  <div class="day-cell">
+                  <div class="day-cell" onclick="selectDay($item)">
                     <div
-                      class="{{ $item.isToday ? 'day-circle-today' : 'day-circle' }}"
+                      class="{{ $item.isSelected ? 'day-circle-selected' : ($item.isToday ? 'day-circle-today' : 'day-circle') }}"
                       show="{{ $item.day > 0 }}"
                     >
-                      <text class="{{ $item.isToday ? 'day-text-today' : 'day-text' }}">
+                      <text class="{{ $item.isSelected ? 'day-text-selected' : ($item.isToday ? 'day-text-today' : 'day-text') }}">
                         {{ $item.isToday ? '今' : ($item.day > 0 ? $item.day : '') }}
                       </text>
                     </div>
@@ -93,16 +93,22 @@
           <!-- 今日收支明细 -->
           <div class="today-section">
             <div class="today-header">
-              <text class="today-title">今日收支明细</text>
+              <text class="today-title">{{ selectedDayLabel }}收支明细</text>
               <div class="today-stats">
-                <text class="today-income">收入：<text style="color:#007AFF; font-weight: bold; font-size: 9px;">¥{{ todayIncome }}</text></text>
-                <text class="today-expense" style="margin-left: 15px;">支出：<text style="color:#EE3F4D; font-weight: bold; font-size: 9px;">{{ todayExpense }}</text></text>
+                <div class="today-income-row">
+                  <text class="today-income">收入：</text>
+                  <text class="today-income-value">¥{{ todayIncome }}</text>
+                </div>
+                <div class="today-expense-row">
+                  <text class="today-expense">支出：</text>
+                  <text class="today-expense-value">¥{{ todayExpense }}</text>
+                </div>
               </div>
             </div>
             <!-- 今日明细列表 -->
             <block if="{{ todayRecords.length > 0 }}">
               <block for="{{ todayRecords }}">
-                <div class="record-item">
+                <div class="record-item" onclick="toDetail($item)">
                   <image class="record-icon" src="{{ $item.categoryIcon }}"></image>
                   <div class="record-info">
                     <text class="record-cat">{{ $item.category }}</text>
@@ -204,6 +210,7 @@
 
 <script>
 import storage from '@system.storage'
+import router from '@system.router'
 
 export default {
   props: ['isActive'],
@@ -217,6 +224,8 @@ export default {
     monthIncome: '0.00',
     monthBalance: '0.00',
     calendarWeeks: [],
+    selectedDayStr: '',
+    selectedDayLabel: '今日',
     todayIncome: '0.00',
     todayExpense: '0.00',
     todayRecords: [],
@@ -228,6 +237,8 @@ export default {
     const now = new Date()
     this.currentYear = now.getFullYear()
     this.currentMonth = now.getMonth() + 1
+    this.selectedDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    this.selectedDayLabel = '今日'
     this.updateDisplayDate()
     this.buildCalendar()
     this.loadData()
@@ -257,13 +268,16 @@ export default {
 
     const cells = []
     for (let i = 0; i < firstDay; i++) {
-      cells.push({ day: 0, isToday: false, isSun: i === 0, isSat: i === 6 })
+      cells.push({ day: 0, isToday: false, isSelected: false, isSun: i === 0, isSat: i === 6 })
     }
     for (let d = 1; d <= daysInMonth; d++) {
       const col = (firstDay + d - 1) % 7
+      const dStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
       cells.push({
         day: d,
+        dateStr: dStr,
         isToday: year === todayYear && month === todayMonth && d === todayDay,
+        isSelected: dStr === this.selectedDayStr,
         isSun: col === 0,
         isSat: col === 6
       })
@@ -301,10 +315,11 @@ export default {
         this.monthExpense = this.fmt(totalExpense)
         this.monthBalance = this.fmt(totalIncome - totalExpense)
 
-        // 今日明细
+        // 选中日期明细
         const now = new Date()
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-        const todayRecs = allRecords.filter(r => r.dateStr === todayStr)
+        const targetStr = this.selectedDayStr || todayStr
+        const todayRecs = allRecords.filter(r => r.dateStr === targetStr)
         let tIn = 0
         let tOut = 0
         todayRecs.forEach(r => {
@@ -380,9 +395,11 @@ export default {
         const isR = Math.cos(mid) >= 0
         const x1 = cx + Math.cos(mid) * (outerR + 2)
         const y1 = cy + Math.sin(mid) * (outerR + 2)
-        const x2 = cx + Math.cos(mid) * (outerR + 8)
-        const y2 = cy + Math.sin(mid) * (outerR + 8)
-        let x3 = isR ? Math.min(x2 + 8, w - 2) : Math.max(x2 - 8, 2)
+        const x2 = cx + Math.cos(mid) * (outerR + 6)
+        const y2 = cy + Math.sin(mid) * (outerR + 6)
+        let x3 = isR ? x2 + 8 : x2 - 8
+        if (isR && x3 > w - 2) x3 = w - 2
+        if (!isR && x3 < 2) x3 = 2
         ctx.strokeStyle = item.color
         ctx.lineWidth = 0.7
         ctx.beginPath()
@@ -391,15 +408,18 @@ export default {
         ctx.lineTo(x3, y2)
         ctx.stroke()
         ctx.textAlign = isR ? 'left' : 'right'
-        const tx = isR ? x3 + 2 : x3 - 2
+        const textPad = 3
+        let tx = isR ? x3 + textPad : x3 - textPad
+        if (isR && tx > w - 15) tx = w - 15
+        if (!isR && tx < 15) tx = 15
         ctx.fillStyle = '#666666'
         ctx.font = '7px sans-serif'
         ctx.textBaseline = 'bottom'
-        ctx.fillText(item.category, tx, y2 - 0.5)
+        ctx.fillText(item.category, tx, y2 - 0.7)
         ctx.fillStyle = item.color
         ctx.font = 'bold 7px sans-serif'
         ctx.textBaseline = 'top'
-        ctx.fillText(item.percent.toFixed(1) + '%', tx, y2 + 0.5)
+        ctx.fillText(item.percent.toFixed(1) + '%', tx, y2 + 0.7)
       }
       angle = end
     })
@@ -415,6 +435,54 @@ export default {
   },
   fmt(num) {
     return num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  },
+  toDetail(item) {
+    if (!item) return
+    router.push({
+      uri: 'pages/Details',
+      params: {
+        recordStr: JSON.stringify(item)
+      }
+    })
+  },
+  selectDay(item) {
+    if (!item || !item.day || !item.dateStr) return
+    this.selectedDayStr = item.dateStr
+    const now = new Date()
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    if (item.dateStr === todayStr) {
+      this.selectedDayLabel = '今日'
+    } else {
+      this.selectedDayLabel = `${item.dateStr.slice(5, 7)}月${item.dateStr.slice(8, 10)}日`
+    }
+    // 重新标记日历选中状态
+    this.buildCalendar()
+    // 加载选中日期的明细
+    this.loadMingxiForSelectedDay()
+  },
+  loadMingxiForSelectedDay() {
+    storage.get({
+      key: 'accounting_records',
+      success: (data) => {
+        let allRecords = []
+        if (data) { try { allRecords = JSON.parse(data) } catch (e) {} }
+        const targetStr = this.selectedDayStr
+        const recs = allRecords.filter(r => r.dateStr === targetStr)
+        let tIn = 0, tOut = 0
+        recs.forEach(r => {
+          if (r.type === 'income') tIn += r.amount
+          else tOut += r.amount
+        })
+        this.todayIncome = this.fmt(tIn)
+        this.todayExpense = this.fmt(tOut)
+        this.todayRecords = recs.reverse()
+      },
+      fail: () => {
+        this.todayIncome = '0.00'
+        this.todayExpense = '0.00'
+        this.todayRecords = []
+      }
+    })
   },
   toggleEye() {
     this.showMoney = !this.showMoney
@@ -437,6 +505,8 @@ export default {
     } else {
       this.currentMonth--
     }
+    this.selectedDayStr = `${this.currentYear}-${String(this.currentMonth).padStart(2, '0')}-01`
+    this.selectedDayLabel = `${String(this.currentMonth).padStart(2, '0')}月01日`
     this.updateDisplayDate()
     this.buildCalendar()
     this.loadData()
@@ -448,6 +518,8 @@ export default {
     } else {
       this.currentMonth++
     }
+    this.selectedDayStr = `${this.currentYear}-${String(this.currentMonth).padStart(2, '0')}-01`
+    this.selectedDayLabel = `${String(this.currentMonth).padStart(2, '0')}月01日`
     this.updateDisplayDate()
     this.buildCalendar()
     this.loadData()
@@ -547,7 +619,7 @@ export default {
 .data-card {
   background-color: #ffffff;
   border-radius: 12px;
-  padding: 20px;
+  padding: 10px;
   margin-bottom: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
@@ -561,12 +633,14 @@ export default {
 .data-col {
   flex-direction: column;
   flex: 0;
+  flex-shrink: 0;
   align-items: flex-start;
 }
 
 .data-col-right {
   flex-direction: column;
   flex: 0;
+  flex-shrink: 0;
   margin-left: 65px;
   align-items: flex-end;
 }
@@ -575,13 +649,15 @@ export default {
   flex-direction: row;
   align-items: center;
   margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .label {
   font-size: 11px;
   color: #333333;
+  font-weight: bold;
   lines: 1;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .eye-icon {
@@ -597,10 +673,11 @@ export default {
   font-weight: bold;
   margin-bottom: 8px;
   font-family: serif;
+  flex-shrink: 0;
 }
 
 .balance {
-  font-size: 12px;
+  font-size: 9px;
   color: #666666;
   margin-top: 5px;
 }
@@ -669,6 +746,15 @@ export default {
   justify-content: center;
 }
 
+.day-circle-selected {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background-color: #333333;
+  align-items: center;
+  justify-content: center;
+}
+
 .day-text {
   font-size: 9px;
   color: #333333;
@@ -682,6 +768,13 @@ export default {
 }
 
 .day-text-today {
+  font-size: 9px;
+  color: #ffffff;
+  font-weight: bold;
+  text-align: center;
+}
+
+.day-text-selected {
   font-size: 9px;
   color: #ffffff;
   font-weight: bold;
@@ -721,14 +814,37 @@ export default {
   flex-shrink: 0;
 }
 
+.today-income-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.today-expense-row {
+  flex-direction: row;
+  align-items: center;
+  margin-left: 15px;
+}
+
 .today-income {
   font-size: 8px;
   color: #333333;
 }
 
+.today-income-value {
+  font-size: 9px;
+  color: #007AFF;
+  font-weight: bold;
+}
+
 .today-expense {
   font-size: 8px;
   color: #333333;
+}
+
+.today-expense-value {
+  font-size: 9px;
+  color: #EE3F4D;
+  font-weight: bold;
 }
 
 .record-item {
@@ -857,21 +973,24 @@ export default {
 /* 饼图 */
 .pie-section {
   flex-direction: row;
+  justify-content: space-between;
   align-items: center;
   height: 160px;
   margin-bottom: 10px;
-  padding: 0 5px;
+  padding: 10px;
 }
 
 .pie-wrapper {
   flex: 1;
   justify-content: center;
   align-items: center;
+  margin-left: -20px;
 }
 
 .pie-stack {
   width: 160px;
   height: 150px;
+  position: relative;
 }
 
 .pie-canvas {
@@ -882,6 +1001,8 @@ export default {
 .pie-legend-list {
   flex-direction: column;
   justify-content: center;
+  margin-left: 0px;
+  margin-right: 0px;
 }
 
 .legend-row {

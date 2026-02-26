@@ -70,6 +70,9 @@
       },
       "pages/DemoDetail": {
         "component": "index"
+      },
+      "pages/Details": {
+        "component": "index"
       }
     }
   },
@@ -92,6 +95,10 @@
       },
       "pages/DemoDetail": {
         "titleBarText": "详情页"
+      },
+      "pages/Details": {
+        "titleBar": false,
+        "menu": false
       }
     }
   },

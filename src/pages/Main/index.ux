@@ -56,30 +56,234 @@
         >我的</text>
       </div>
     </div>
+
+    <!-- 攒钱-新建计划弹窗（在Main层，可覆盖tabbar） -->
+    <div class="zq-dialog-overlay" if="{{showZanqianDialog}}">
+      <div class="zq-dialog-close-layer" onclick="hideZanqianDialog"></div>
+      <div class="zq-dialog-box">
+        <div class="zq-header">
+          <div class="zq-back-btn" onclick="hideZanqianDialog">
+            <image class="zq-back-icon" src="../../assets/img/back.png"></image>
+          </div>
+          <text class="zq-title">新建计划</text>
+          <div style="width: 28px;"></div>
+        </div>
+        <div class="zq-icon-grid">
+          <block for="{{zqPlanTypes}}">
+            <div class="zq-icon-item" onclick="zqSelectType($item)">
+              <div class="zq-icon-wrap">
+                <image class="zq-type-icon" src="{{$item.icon}}"></image>
+              </div>
+              <text class="zq-icon-name {{zqSelectedType === $item.name ? 'zq-name-selected' : ''}}">{{$item.name}}</text>
+            </div>
+          </block>
+        </div>
+        <div class="zq-bottom-area">
+          <div class="zq-form">
+            <div class="zq-form-item">
+              <text class="zq-label">需要存款额（元）</text>
+              <input class="zq-input" type="number" placeholder="请输入需要存款金额" placeholder-style="font-size: 9px; color: #aaaaaa;" value="{{zqTarget}}" onchange="onZqTargetChange" />
+            </div>
+            <div class="zq-form-item">
+              <text class="zq-label">已存款额（元）</text>
+              <input class="zq-input" type="number" placeholder="请输入已存款金额" placeholder-style="font-size: 9px; color: #aaaaaa;" value="{{zqCurrent}}" onchange="onZqCurrentChange" />
+            </div>
+            <div class="zq-form-item">
+              <text class="zq-label">备注</text>
+              <input class="zq-input" type="text" placeholder="请输入备注" placeholder-style="font-size: 9px; color: #aaaaaa;" value="{{zqNote}}" onchange="onZqNoteChange" />
+            </div>
+          </div>
+          <div class="zq-footer">
+            <div class="zq-btn-cancel" onclick="hideZanqianDialog">
+              <text class="zq-btn-text">删除</text>
+            </div>
+            <div class="zq-btn-confirm" onclick="zqCreatePlan">
+              <text class="zq-btn-text">确定</text>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 攒钱-删除确认弹窗 -->
+    <div class="del-dialog-overlay" if="{{showDeleteDialog}}">
+      <div class="del-dialog-mask" onclick="hideDeleteDialog"></div>
+      <div class="del-dialog-box">
+        <text class="del-dialog-text">是否要删除此条存钱计划?</text>
+        <div class="del-dialog-footer">
+          <div class="del-btn-cancel" onclick="hideDeleteDialog">
+            <text class="del-btn-cancel-text">取消</text>
+          </div>
+          <div class="del-btn-confirm" onclick="confirmDeletePlan">
+            <text class="del-btn-confirm-text">确定</text>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
+import storage from '@system.storage'
+import prompt from '@system.prompt'
+
 export default {
   private: {
-    currentIndex: 0
+    currentIndex: 0,
+    showZanqianDialog: false,
+    showDeleteDialog: false,
+    deleteTargetId: null,
+    zqTarget: '',
+    zqCurrent: '',
+    zqNote: '',
+    zqSelectedType: '电子数码',
+    zqSelectedIcon: '../../assets/img/shouru/dianzishuma.png',
+    zqPlanTypes: [
+      { name: '电子数码', icon: '../../assets/img/shouru/dianzishuma.png' },
+      { name: '旅游出行', icon: '../../assets/img/shouru/lvyouchuxing.png' },
+      { name: '购置房产', icon: '../../assets/img/shouru/gouzhifangchan.png' },
+      { name: '代步车辆', icon: '../../assets/img/shouru/daibucheliang.png' },
+      { name: '首饰衣服', icon: '../../assets/img/shouru/shoushi.png' },
+      { name: '教育学习', icon: '../../assets/img/shouru/jiaoyuxuexi.png' },
+      { name: '养老存款', icon: '../../assets/img/shouru/yanglao.png' },
+      { name: '赠送礼物', icon: '../../assets/img/shouru/liwu.png' },
+      { name: '心中理想', icon: '../../assets/img/shouru/xinhzonglixiang.png' },
+      { name: '随便存存', icon: '../../assets/img/shouru/suibiancun.png' }
+    ]
   },
   onInit() {
     if (this.tabIndex !== undefined && this.tabIndex !== null) {
       this.currentIndex = parseInt(this.tabIndex)
     }
     this.$on('switchToTab', this.handleSwitchTab)
+    this.$on('openZanqianDialog', this.openZanqianDialog)
+    this.$on('openDeleteDialog', this.openDeleteDialog)
   },
   handleSwitchTab(evt) {
     if (evt && evt.detail && evt.detail.index !== undefined) {
       this.currentIndex = evt.detail.index
+      if (evt.detail.index === 0) {
+        setTimeout(() => {
+          const shouyePage = this.$child('shouye-page')
+          if (shouyePage && shouyePage.loadData) {
+            shouyePage.loadData()
+          }
+        }, 100)
+      }
     }
   },
   changeTab(e) {
     this.currentIndex = e.index
+    this.refreshCurrentTab(e.index)
   },
   clickTab(index) {
     this.currentIndex = index
+    this.refreshCurrentTab(index)
+  },
+  refreshCurrentTab(index) {
+    setTimeout(() => {
+      if (index === 0) {
+        const shouyePage = this.$child('shouye-page')
+        if (shouyePage && shouyePage.loadData) {
+          shouyePage.loadData()
+        }
+      }
+    }, 100)
+  },
+  openZanqianDialog() {
+    this.zqTarget = ''
+    this.zqCurrent = ''
+    this.zqNote = ''
+    this.zqSelectedType = '电子数码'
+    this.zqSelectedIcon = '../../assets/img/shouru/dianzishuma.png'
+    this.showZanqianDialog = true
+  },
+  hideZanqianDialog() {
+    this.showZanqianDialog = false
+  },
+  openDeleteDialog(evt) {
+    const id = evt && evt.detail ? evt.detail.id : null
+    this.deleteTargetId = id
+    this.showDeleteDialog = true
+  },
+  hideDeleteDialog() {
+    this.showDeleteDialog = false
+    this.deleteTargetId = null
+  },
+  confirmDeletePlan() {
+    const id = this.deleteTargetId
+    storage.get({
+      key: 'saving_plans',
+      success: data => {
+        let plans = []
+        if (data) { try { plans = JSON.parse(data); if (!Array.isArray(plans)) plans = [] } catch(e) { plans = [] } }
+        plans = plans.filter(p => p.id !== id)
+        storage.set({
+          key: 'saving_plans',
+          value: JSON.stringify(plans),
+          success: () => {
+            prompt.showToast({ message: '删除成功' })
+            this.showDeleteDialog = false
+            this.deleteTargetId = null
+            this.$broadcast('planDeleted', {})
+          },
+          fail: () => { prompt.showToast({ message: '删除失败' }) }
+        })
+      },
+      fail: () => { prompt.showToast({ message: '删除失败' }) }
+    })
+  },
+  zqSelectType(item) {
+    this.zqSelectedType = item.name
+    this.zqSelectedIcon = item.icon
+  },
+  onZqTargetChange(e) { if (e && e.value !== undefined) this.zqTarget = e.value },
+  onZqCurrentChange(e) { if (e && e.value !== undefined) this.zqCurrent = e.value },
+  onZqNoteChange(e) { if (e && e.value !== undefined) this.zqNote = e.value },
+  zqCreatePlan() {
+    const target = parseFloat(this.zqTarget)
+    if (!target || target <= 0) {
+      prompt.showToast({ message: '请输入有效的目标金额' })
+      return
+    }
+    const name = (this.zqNote && this.zqNote.trim()) ? this.zqNote.trim() : this.zqSelectedType
+    const plan = {
+      id: Date.now(),
+      name: name,
+      categoryName: this.zqSelectedType,
+      target: target,
+      current: parseFloat(this.zqCurrent) || 0,
+      icon: this.zqSelectedIcon
+    }
+    storage.get({
+      key: 'saving_plans',
+      success: data => {
+        let plans = []
+        if (data) { try { plans = JSON.parse(data); if (!Array.isArray(plans)) plans = [] } catch(e) { plans = [] } }
+        plans.push(plan)
+        storage.set({
+          key: 'saving_plans',
+          value: JSON.stringify(plans),
+          success: () => {
+            prompt.showToast({ message: '创建成功' })
+            this.showZanqianDialog = false
+            this.$broadcast('planCreated', {})
+          },
+          fail: () => { prompt.showToast({ message: '保存失败' }) }
+        })
+      },
+      fail: () => {
+        storage.set({
+          key: 'saving_plans',
+          value: JSON.stringify([plan]),
+          success: () => {
+            prompt.showToast({ message: '创建成功' })
+            this.showZanqianDialog = false
+            this.$broadcast('planCreated', {})
+          },
+          fail: () => { prompt.showToast({ message: '保存失败' }) }
+        })
+      }
+    })
   }
 }
 </script>
@@ -113,6 +317,7 @@ export default {
   justify-content: space-around;
   align-items: center;
   border-radius: 21px;
+  z-index: 1000;
 }
 
 .tab-item {
@@ -132,5 +337,245 @@ export default {
 .tab-text {
   font-size: 7px;
   color: #999999;
+}
+
+/* 攒钱新建弹窗 */
+.zq-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99999;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 40px;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+.zq-dialog-close-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+.zq-dialog-box {
+  position: relative;
+  width: 94%;
+  background: linear-gradient(180deg, #deeeff 0%, #ffffff 50%);
+  border-radius: 20px;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.zq-header {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px 9px 16px;
+}
+
+.zq-back-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background-color: rgba(255,255,255,0.8);
+  justify-content: center;
+  align-items: center;
+}
+
+.zq-back-icon {
+  width: 5px;
+  height: 9px;
+}
+
+.zq-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #000000;
+}
+
+.zq-icon-grid {
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding: 0 8px;
+  margin-bottom: 4px;
+}
+
+.zq-icon-item {
+  width: 25%;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.zq-icon-wrap {
+  width: 34px;
+  height: 34px;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.zq-type-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.zq-icon-name {
+  font-size: 9px;
+  color: #555555;
+  text-align: center;
+}
+
+.zq-name-selected {
+  color: #0055ff;
+  font-weight: bold;
+}
+
+.zq-bottom-area {
+  flex-direction: column;
+  background-color: transparent;
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+}
+
+.zq-form {
+  flex-direction: column;
+  padding: 0 14px;
+}
+
+.zq-form-item {
+  flex-direction: column;
+  margin-bottom: 5px;
+}
+
+.zq-label {
+  font-size: 10px;
+  color: #333333;
+  margin-bottom: 4px;
+}
+
+.zq-input {
+  height: 34px;
+  background-color: #f0f0f0;
+  border-radius: 7px;
+  font-size: 11px;
+  padding-left: 10px;
+  color: #333333;
+}
+
+.zq-footer {
+  flex-direction: row;
+  padding: 8px 14px 6px 14px;
+}
+
+.zq-btn-cancel {
+  flex: 1;
+  height: 38px;
+  background-color: #ff2222;
+  border-radius: 19px;
+  justify-content: center;
+  align-items: center;
+  margin-right: 10px;
+}
+
+.zq-btn-confirm {
+  flex: 1;
+  height: 38px;
+  background-color: #0055ff;
+  border-radius: 19px;
+  justify-content: center;
+  align-items: center;
+}
+
+.zq-btn-text {
+  font-size: 12px;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+/* 攒钱-删除确认弹窗 */
+.del-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 99999;
+  justify-content: center;
+  align-items: center;
+}
+
+.del-dialog-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+.del-dialog-box {
+  position: relative;
+  width: 94%;
+  background: linear-gradient(180deg, #ffb3b3 0%, #ffffff 25%);
+  border-radius: 20px;
+  flex-direction: column;
+  align-items: center;
+  z-index: 100000;
+  overflow: hidden;
+  padding: 40px 20px 24px 20px;
+}
+
+.del-dialog-text {
+  font-size: 11px;
+  color: #111111;
+  font-weight: bold;
+  text-align: center;
+  margin-top: -12px;
+  margin-bottom: 24px;
+}
+
+.del-dialog-footer {
+  flex-direction: row;
+  width: 100%;
+}
+
+.del-btn-cancel {
+  flex: 1;
+  height: 36px;
+  border-radius: 18px;
+  border: 1px solid #333333;
+  justify-content: center;
+  align-items: center;
+  margin-right: 12px;
+  background-color: #ffffff;
+}
+
+.del-btn-cancel-text {
+  font-size: 11px;
+  color: #111111;
+  font-weight: bold;
+}
+
+.del-btn-confirm {
+  flex: 1;
+  height: 36px;
+  border-radius: 18px;
+  background-color: #ff2222;
+  justify-content: center;
+  align-items: center;
+}
+
+.del-btn-confirm-text {
+  font-size: 11px;
+  color: #ffffff;
+  font-weight: bold;
 }
 </style>

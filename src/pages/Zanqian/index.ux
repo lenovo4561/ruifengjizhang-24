@@ -1,28 +1,336 @@
 <template>
-  <div class="page">
-    <text class="title">攒钱</text>
+  <div class="zanqian-page">
+    <list class="zanqian-list">
+      <!-- 顶部背景 + 标题栏 -->
+      <list-item type="header" class="list-header-item">
+        <div class="header-wrapper">
+          <image class="header-bg" src="../../assets/img/shoujibizhi-bg-1.png"></image>
+        </div>
+        <div class="plan-header">
+          <text class="plan-header-title">我的存钱计划</text>
+          <div class="new-btn" onclick="showCreateDialog">
+            <text class="new-btn-text">+ 新建</text>
+          </div>
+        </div>
+      </list-item>
+
+      <!-- 计划卡片 -->
+      <list-item type="plan" class="plan-item" for="{{plans}}">
+        <div class="plan-card">
+          <div class="plan-card-top">
+            <div class="plan-left">
+              <div class="plan-icon-wrapper">
+                <image class="plan-icon" src="{{ $item.icon }}"></image>
+              </div>
+              <text class="plan-category">{{ $item.categoryName || $item.name }}</text>
+            </div>
+            <div class="plan-right">
+              <div class="plan-top-row">
+                <text class="plan-title">{{ $item.name }}</text>
+                <div class="edit-wrapper" onclick="openEditDialog($item)">
+                  <image class="edit-icon" src="../../assets/img/bianji.png"></image>
+                  <text class="edit-text">编辑</text>
+                </div>
+              </div>
+              <text class="plan-target-amount">¥{{ Number($item.target).toFixed(2) }}</text>
+            </div>
+          </div>
+          <div class="plan-progress-track">
+            <div class="plan-progress-fill" style="width: {{ Math.min(($item.current / $item.target) * 100, 100) }}%"></div>
+          </div>
+          <div class="plan-stats-row">
+            <text class="stats-text">已存款: ¥{{ $item.current }}</text>
+            <text class="stats-text">存款进度: {{ Math.floor(Math.min(($item.current / $item.target) * 100, 100)) }}%</text>
+            <text class="stats-text">还需存款: ¥{{ ($item.target - $item.current).toFixed(0) }}</text>
+          </div>
+        </div>
+      </list-item>
+
+      <!-- 空状态 -->
+      <list-item type="empty" class="empty-item" if="{{plans.length === 0}}">
+        <div class="empty-state">
+          <image class="empty-img" src="../../assets/img/kong-1.png"></image>
+          <text class="empty-text">当前暂无数据～</text>
+        </div>
+      </list-item>
+
+      <!-- 底部占位 -->
+      <list-item type="footer" class="list-footer-item"></list-item>
+    </list>
   </div>
 </template>
 
 <script>
+import storage from '@system.storage'
+
 export default {
-  private: {},
-  onInit() {}
+  data: {
+    plans: []
+  },
+  onInit() {
+    this.loadPlans()
+    this.$on('planCreated', () => { this.loadPlans() })
+    this.$on('planDeleted', () => { this.loadPlans() })
+  },
+  loadPlans() {
+    storage.get({
+      key: 'saving_plans',
+      success: data => {
+        if (data) {
+          try {
+            const list = JSON.parse(data)
+            this.plans = Array.isArray(list) ? list : []
+          } catch (e) {
+            this.plans = []
+          }
+        } else {
+          this.plans = []
+        }
+      },
+      fail: () => { this.plans = [] }
+    })
+  },
+  showCreateDialog() {
+    this.$dispatch('openZanqianDialog', {})
+  },
+  openEditDialog(item) {
+    this.$dispatch('openDeleteDialog', { id: item.id })
+  }
 }
 </script>
 
 <style>
-.page {
+.zanqian-page {
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: #f5f5f5;
+}
+
+.zanqian-list {
+  flex: 1;
+  width: 100%;
+  background-color: #ffffff;
+}
+
+.list-header-item {
+  width: 100%;
+  flex-direction: column;
+}
+
+.list-footer-item {
+  width: 100%;
+  height: 80px;
+}
+
+.header-wrapper {
+  width: 100%;
+  height: 120px;
+}
+
+.header-bg {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+}
+
+.content-area {
+  flex: 1;
+  flex-direction: column;
+  background-color: #ffffff;
+  padding: 0;
+}
+
+.plan-header {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 15px 12px 15px;
+}
+
+.plan-header-title {
+  font-size: 10px;
+  font-weight: bold;
+  color: #111111;
+}
+
+.new-btn {
+  background-color: #e8302a;
+  border-radius: 12px;
+  padding-left: 10px;
+  padding-right: 10px;
+  height: 22px;
+  justify-content: center;
+  align-items: center;
+}
+
+.new-btn-text {
+  font-size: 9px;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.plan-list {
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  padding-bottom: 80px;
+}
+
+.plan-item {
+  width: 100%;
+  padding: 0 12px;
+  margin-bottom: 10px;
+}
+
+.empty-item {
+  width: 100%;
+}
+
+.plan-card {
+  flex-direction: column;
+  background-color: #f7fbff;
+  border-radius: 12px;
+  padding: 0px 10px 10px 10px;
+  width: 100%;
+}
+
+.plan-card-top {
+  flex-direction: row;
+  align-items: stretch;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+/* Left side: Icon + Category Name */
+.plan-left {
+  flex-direction: column;
+  align-items: center;
+  margin-right: 10px;
+  width: 36px;
+}
+
+.plan-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background-color: #f2f2f2;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.plan-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.plan-category {
+  font-size: 8px;
+  color: #333333;
+  text-align: center;
+}
+
+/* Right side: Content */
+.plan-right {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.plan-top-row {
+  position: relative;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: flex-start;
+  margin-bottom: 2px;
+  width: 100%;
+  min-height: 12px;
+}
+
+.plan-title {
+  flex: 1;
+  font-size: 10px;
+  color: #000000;
+  font-weight: bold;
+  margin-bottom: 2px;
+  padding-right: 36px;
+}
+
+.edit-wrapper {
+  position: absolute;
+  right: 0;
+  top: 0;
+  flex-direction: row;
+  align-items: center;
+  opacity: 0.5;
+}
+
+.edit-icon {
+  width: 8px;
+  height: 8px;
+  margin-right: 2px;
+}
+
+.edit-text {
+  font-size: 8px;
+  color: #999999;
+}
+
+.plan-target-amount {
+  font-size: 12px;
+  font-weight: bold;
+  color: #000000;
+  margin-bottom: 4px;
+}
+
+.plan-progress-track {
+  width: 100%;
+  height: 5px;
+  background-color: #f0f0f0;
+  border-radius: 3px;
+  margin-bottom: 6px;
+  margin-top: 6px;
+}
+
+.plan-progress-fill {
+  height: 100%;
+  background-color: #4cd964;
+  border-radius: 3px;
+}
+
+.plan-stats-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stats-text {
+  font-size: 8px;
+  color: #999999;
+}
+
+
+.empty-state {
   flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
+  padding-top: 60px;
+  padding-bottom: 60px;
 }
 
-.title {
-  font-size: 18px;
-  color: #333333;
+.empty-img {
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+  margin-bottom: 12px;
+}
+
+.empty-text {
+  font-size: 13px;
+  color: #aaaaaa;
 }
 </style>
