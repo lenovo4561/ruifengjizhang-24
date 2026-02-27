@@ -62,10 +62,10 @@
       <div class="zq-dialog-close-layer" onclick="hideZanqianDialog"></div>
       <div class="zq-dialog-box">
         <div class="zq-header">
-          <div class="zq-back-btn" onclick="hideZanqianDialog">
+          <div class="zq-back-btn" onclick="closeZanqianDialog">
             <image class="zq-back-icon" src="../../assets/img/back.png"></image>
           </div>
-          <text class="zq-title">新建计划</text>
+          <text class="zq-title">{{ isEditMode ? '编辑计划' : '新建计划' }}</text>
           <div style="width: 28px;"></div>
         </div>
         <div class="zq-icon-grid">
@@ -95,10 +95,10 @@
           </div>
           <div class="zq-footer">
             <div class="zq-btn-cancel" onclick="hideZanqianDialog">
-              <text class="zq-btn-text">删除</text>
+              <text class="zq-btn-text">{{ isEditMode ? '删除' : '取消' }}</text>
             </div>
             <div class="zq-btn-confirm" onclick="zqCreatePlan">
-              <text class="zq-btn-text">确定</text>
+              <text class="zq-btn-text">{{ isEditMode ? '保存' : '确定' }}</text>
             </div>
           </div>
         </div>
@@ -135,6 +135,8 @@ export default {
     zqTarget: '',
     zqCurrent: '',
     zqNote: '',
+    isEditMode: false,
+    editingPlanId: null,
     zqSelectedType: '电子数码',
     zqSelectedIcon: '../../assets/img/shouru/dianzishuma.png',
     zqPlanTypes: [
@@ -157,6 +159,17 @@ export default {
     this.$on('switchToTab', this.handleSwitchTab)
     this.$on('openZanqianDialog', this.openZanqianDialog)
     this.$on('openDeleteDialog', this.openDeleteDialog)
+  },
+  onShow() {
+    // 从详情页返回时刷新当前 Tab 数据
+    setTimeout(() => {
+      if (this.currentIndex === 0) {
+        const shouyePage = this.$child('shouye-page')
+        if (shouyePage && shouyePage.loadData) {
+          shouyePage.loadData()
+        }
+      }
+    }, 100)
   },
   handleSwitchTab(evt) {
     if (evt && evt.detail && evt.detail.index !== undefined) {
@@ -189,16 +202,41 @@ export default {
       }
     }, 100)
   },
-  openZanqianDialog() {
-    this.zqTarget = ''
-    this.zqCurrent = ''
-    this.zqNote = ''
-    this.zqSelectedType = '电子数码'
-    this.zqSelectedIcon = '../../assets/img/shouru/dianzishuma.png'
+  openZanqianDialog(evt) {
+    const item = evt && evt.detail ? evt.detail.item : null
+    if (item) {
+      this.isEditMode = true
+      this.editingPlanId = item.id
+      this.zqTarget = String(item.target || '')
+      this.zqCurrent = String(item.current || '')
+      this.zqNote = item.name || ''
+      this.zqSelectedType = item.categoryName || '电子数码'
+      this.zqSelectedIcon = item.icon || '../../assets/img/shouru/dianzishuma.png'
+    } else {
+      this.isEditMode = false
+      this.editingPlanId = null
+      this.zqTarget = ''
+      this.zqCurrent = ''
+      this.zqNote = ''
+      this.zqSelectedType = '电子数码'
+      this.zqSelectedIcon = '../../assets/img/shouru/dianzishuma.png'
+    }
     this.showZanqianDialog = true
   },
-  hideZanqianDialog() {
+  closeZanqianDialog() {
     this.showZanqianDialog = false
+    this.isEditMode = false
+    this.editingPlanId = null
+  },
+  hideZanqianDialog() {
+    if (this.isEditMode && this.editingPlanId !== null) {
+      this.deleteTargetId = this.editingPlanId
+      this.showDeleteDialog = true
+      return
+    }
+    this.showZanqianDialog = false
+    this.isEditMode = false
+    this.editingPlanId = null
   },
   openDeleteDialog(evt) {
     const id = evt && evt.detail ? evt.detail.id : null
@@ -223,6 +261,9 @@ export default {
           success: () => {
             prompt.showToast({ message: '删除成功' })
             this.showDeleteDialog = false
+            this.showZanqianDialog = false
+            this.isEditMode = false
+            this.editingPlanId = null
             this.deleteTargetId = null
             this.$broadcast('planDeleted', {})
           },
@@ -247,7 +288,7 @@ export default {
     }
     const name = (this.zqNote && this.zqNote.trim()) ? this.zqNote.trim() : this.zqSelectedType
     const plan = {
-      id: Date.now(),
+      id: this.isEditMode && this.editingPlanId !== null ? this.editingPlanId : Date.now(),
       name: name,
       categoryName: this.zqSelectedType,
       target: target,
@@ -259,13 +300,19 @@ export default {
       success: data => {
         let plans = []
         if (data) { try { plans = JSON.parse(data); if (!Array.isArray(plans)) plans = [] } catch(e) { plans = [] } }
-        plans.push(plan)
+        if (this.isEditMode && this.editingPlanId !== null) {
+          plans = plans.map(p => p.id === this.editingPlanId ? plan : p)
+        } else {
+          plans.push(plan)
+        }
         storage.set({
           key: 'saving_plans',
           value: JSON.stringify(plans),
           success: () => {
-            prompt.showToast({ message: '创建成功' })
+            prompt.showToast({ message: this.isEditMode ? '保存成功' : '创建成功' })
             this.showZanqianDialog = false
+            this.isEditMode = false
+            this.editingPlanId = null
             this.$broadcast('planCreated', {})
           },
           fail: () => { prompt.showToast({ message: '保存失败' }) }

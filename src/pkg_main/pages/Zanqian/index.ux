@@ -94,7 +94,7 @@ export default {
     this.$dispatch('openZanqianDialog', {})
   },
   openEditDialog(item) {
-    this.$dispatch('openDeleteDialog', { id: item.id })
+    this.$dispatch('openZanqianDialog', { item: item })
   }
 }
 </script>

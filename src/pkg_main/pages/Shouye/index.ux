@@ -37,7 +37,7 @@
         <div class="data-card">
           <div class="card-row">
             <div class="data-col">
-              <div class="label-row" onclick="toggleEye">
+              <div class="label-row label-row-left" onclick="toggleEye">
                 <text class="label">本月-支出</text>
                 <image
                   class="eye-icon"
@@ -48,10 +48,10 @@
               <text class="balance">结余：{{ showMoney ? '¥' + monthBalance : '****' }}</text>
             </div>
             <div class="data-col-right">
-              <div class="label-row">
+              <div class="label-row label-row-right">
                 <text class="label">本月-收入</text>
               </div>
-              <text class="amount">{{ showMoney ? '¥' + monthIncome : '****' }}</text>
+              <text class="amount amount-right">{{ showMoney ? '¥' + monthIncome : '****' }}</text>
               <text class="balance" style="opacity: 0;">占位</text>
             </div>
           </div>
@@ -83,6 +83,11 @@
                       <text class="{{ $item.isSelected ? 'day-text-selected' : ($item.isToday ? 'day-text-today' : 'day-text') }}">
                         {{ $item.isToday ? '今' : ($item.day > 0 ? $item.day : '') }}
                       </text>
+                    </div>
+                    <!-- 收支数值标志 -->
+                    <div class="day-indicators" show="{{ $item.day > 0 }}">
+                      <text class="day-indicator-income" if="{{ $item.income }}">{{ $item.income }}</text>
+                      <text class="day-indicator-expense" if="{{ $item.expense }}">{{ $item.expense }}</text>
                     </div>
                   </div>
                 </block>
@@ -205,6 +210,7 @@
 
       </div>
     </list-item>
+    <list-item type="spacer" class="bottom-spacer"></list-item>
   </list>
 </template>
 
@@ -268,7 +274,7 @@ export default {
 
     const cells = []
     for (let i = 0; i < firstDay; i++) {
-      cells.push({ day: 0, isToday: false, isSelected: false, isSun: i === 0, isSat: i === 6 })
+      cells.push({ day: 0, isToday: false, isSelected: false, isSun: i === 0, isSat: i === 6, income: '', expense: '' })
     }
     for (let d = 1; d <= daysInMonth; d++) {
       const col = (firstDay + d - 1) % 7
@@ -279,12 +285,14 @@ export default {
         isToday: year === todayYear && month === todayMonth && d === todayDay,
         isSelected: dStr === this.selectedDayStr,
         isSun: col === 0,
-        isSat: col === 6
+        isSat: col === 6,
+        income: '',
+        expense: ''
       })
     }
     // 补足最后一行
     while (cells.length % 7 !== 0) {
-      cells.push({ day: 0, isToday: false, isSun: false, isSat: false })
+      cells.push({ day: 0, isToday: false, isSun: false, isSat: false, income: '', expense: '' })
     }
     // 按7个一组切成周
     const weeks = []
@@ -331,6 +339,7 @@ export default {
         this.todayRecords = todayRecs.reverse()
 
         this.buildRankList(monthRecords)
+        this.updateCalendarStats(monthRecords)
       },
       fail: () => {
         this.monthIncome = '0.00'
@@ -340,6 +349,33 @@ export default {
         this.rankList = []
       }
     })
+  },
+  updateCalendarStats(monthRecords) {
+    const dayStats = {}
+    monthRecords.forEach(r => {
+      const day = parseInt(r.dateStr.split('-')[2])
+      if (!dayStats[day]) dayStats[day] = { income: 0, expense: 0 }
+      if (r.type === 'income') dayStats[day].income += r.amount
+      else if (r.type === 'expense') dayStats[day].expense += r.amount
+    })
+    this.calendarWeeks = this.calendarWeeks.map(week =>
+      week.map(cell => {
+        if (cell.day > 0) {
+          const stats = dayStats[cell.day]
+          return {
+            day: cell.day,
+            dateStr: cell.dateStr,
+            isToday: cell.isToday,
+            isSelected: cell.isSelected,
+            isSun: cell.isSun,
+            isSat: cell.isSat,
+            income: stats && stats.income > 0 ? stats.income.toFixed(2) : '',
+            expense: stats && stats.expense > 0 ? stats.expense.toFixed(2) : ''
+          }
+        }
+        return cell
+      })
+    )
   },
   buildRankList(monthRecords) {
     const filtered = monthRecords.filter(r => r.type === this.rankType)
@@ -455,8 +491,15 @@ export default {
     } else {
       this.selectedDayLabel = `${item.dateStr.slice(5, 7)}月${item.dateStr.slice(8, 10)}日`
     }
-    // 重新标记日历选中状态
-    this.buildCalendar()
+    // 仅更新选中状态，保留已有的收支数值标志
+    this.calendarWeeks = this.calendarWeeks.map(week =>
+      week.map(cell => {
+        if (cell.day > 0) {
+          return Object.assign({}, cell, { isSelected: cell.dateStr === item.dateStr })
+        }
+        return cell
+      })
+    )
     // 加载选中日期的明细
     this.loadMingxiForSelectedDay()
   },
@@ -626,22 +669,23 @@ export default {
 
 .card-row {
   flex-direction: row;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: flex-start;
 }
 
 .data-col {
   flex-direction: column;
-  flex: 0;
-  flex-shrink: 0;
+  width: 56%;
+  min-width: 0;
+  padding-right: 6px;
   align-items: flex-start;
 }
 
 .data-col-right {
   flex-direction: column;
-  flex: 0;
-  flex-shrink: 0;
-  margin-left: 65px;
+  width: 44%;
+  min-width: 0;
+  padding-left: 2px;
   align-items: flex-end;
 }
 
@@ -650,6 +694,15 @@ export default {
   align-items: center;
   margin-bottom: 8px;
   flex-shrink: 0;
+}
+
+.label-row-left {
+  justify-content: flex-start;
+}
+
+.label-row-right {
+  justify-content: flex-end;
+  width: 100%;
 }
 
 .label {
@@ -665,6 +718,7 @@ export default {
   height: 14px;
   margin-left: 6px;
   object-fit: contain;
+  flex-shrink: 0;
 }
 
 .amount {
@@ -674,12 +728,20 @@ export default {
   margin-bottom: 8px;
   font-family: serif;
   flex-shrink: 0;
+  lines: 1;
+}
+
+.amount-right {
+  lines: 1;
+  text-align: right;
+  width: 100%;
 }
 
 .balance {
   font-size: 9px;
   color: #666666;
   margin-top: 5px;
+  lines: 1;
 }
 
 /* ===== 视图容器 ===== */
@@ -724,9 +786,11 @@ export default {
 
 .day-cell {
   flex: 1;
-  height: 26px;
+  min-height: 38px;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-top: 1px;
 }
 
 .day-circle {
@@ -778,6 +842,26 @@ export default {
   font-size: 9px;
   color: #ffffff;
   font-weight: bold;
+  text-align: center;
+}
+
+.day-indicators {
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1px;
+}
+
+.day-indicator-income {
+  font-size: 6px;
+  color: #00bfa5;
+  lines: 1;
+  text-align: center;
+}
+
+.day-indicator-expense {
+  font-size: 6px;
+  color: #EE3F4D;
+  lines: 1;
   text-align: center;
 }
 
@@ -1093,5 +1177,10 @@ export default {
 .rank-detail {
   font-size: 8px;
   color: #999999;
+}
+
+.bottom-spacer {
+  height: 60px;
+  background-color: transparent;
 }
 </style>
